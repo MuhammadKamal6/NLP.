@@ -15,11 +15,11 @@ from tensorflow.keras.preprocessing.text import tokenizer_from_json
 from tensorflow.keras.applications.densenet import DenseNet201, preprocess_input
 
 
-# ---------------------------
-# EDIT THESE (your GitHub Release)
-# ---------------------------
+# ============================================================
+# EDIT THESE (GitHub Release settings)
+# ============================================================
 OWNER = "MuhammadKamal6"
-REPO  = "NLP."   # change to "NLP" if your repo name has no dot
+REPO  = "NLP."   # change to "NLP" if your repo has no dot
 TAG   = "v1"
 
 ART_DIR = Path("artifacts")
@@ -33,22 +33,17 @@ MODEL_FILES = {
 }
 
 
-# ---------------------------
-# PAGE + COMPACT STYLE (no scroll)
-# ---------------------------
+# ============================================================
+# PAGE + ONE-SCREEN STYLE
+# ============================================================
 st.set_page_config(page_title="CaptionLab", page_icon="✨", layout="wide")
 
 st.markdown(
     """
     <style>
       header, footer, #MainMenu { visibility: hidden; }
-      .block-container {
-        max-width: 1250px;
-        padding-top: 0.8rem;
-        padding-bottom: 0.8rem;
-      }
-      /* Compact spacing between elements */
-      div[data-testid="stVerticalBlock"] > div { gap: 0.65rem; }
+      .block-container { max-width: 1250px; padding-top: .6rem; padding-bottom: .6rem; }
+      div[data-testid="stVerticalBlock"] > div { gap: .55rem; }
 
       [data-testid="stAppViewContainer"] {
         background:
@@ -59,23 +54,21 @@ st.markdown(
 
       .hero {
         border: 1px solid rgba(15,23,42,.10);
-        background: rgba(255,255,255,.80);
+        background: rgba(255,255,255,.85);
         border-radius: 18px;
         padding: 12px 14px;
         box-shadow: 0 14px 32px rgba(15,23,42,.06);
       }
+
       .card {
         border: 1px solid rgba(15,23,42,.10);
-        background: rgba(255,255,255,.78);
+        background: rgba(255,255,255,.80);
         border-radius: 16px;
         padding: 12px 14px;
         box-shadow: 0 12px 28px rgba(15,23,42,.05);
       }
-      .caption {
-        font-size: 1.02rem;
-        line-height: 1.45;
-        color: #0F172A;
-      }
+
+      .caption { font-size: 1.02rem; line-height: 1.45; color: #0F172A; }
       .muted { opacity: .75; color:#0F172A; font-size: .9rem; }
       .pill {
         display:inline-flex; align-items:center; gap:7px;
@@ -85,31 +78,36 @@ st.markdown(
         font-size: .82rem;
         margin-right: 6px;
       }
-      /* Nice button */
+
+      /* Keep image small so no scrolling */
+      [data-testid="stImage"] img {
+        max-height: 340px;
+        width: 100%;
+        object-fit: contain;
+        border-radius: 14px;
+        border: 1px solid rgba(15,23,42,.10);
+        background: rgba(255,255,255,.85);
+      }
+
+      /* Buttons */
       div.stButton > button {
         border-radius: 12px !important;
         padding: .60rem .9rem !important;
         border: 1px solid rgba(14,165,233,.35) !important;
         background: linear-gradient(135deg, rgba(14,165,233,.95), rgba(168,85,247,.75)) !important;
         color: white !important;
-        font-weight: 750 !important;
+        font-weight: 800 !important;
       }
-      /* Make file uploader compact */
-      [data-testid="stFileUploaderDropzone"]{
-        padding: 0.75rem !important;
-        border-radius: 14px !important;
-        border: 1px dashed rgba(15,23,42,.25) !important;
-        background: rgba(255,255,255,.72) !important;
-      }
+      div.stButton > button:hover { filter: brightness(1.05); }
     </style>
     """,
     unsafe_allow_html=True
 )
 
 
-# ---------------------------
-# DOWNLOAD + LOAD
-# ---------------------------
+# ============================================================
+# DOWNLOAD + LOAD HELPERS
+# ============================================================
 def release_url(filename: str) -> str:
     return f"https://github.com/{OWNER}/{REPO}/releases/download/{TAG}/{filename}"
 
@@ -165,9 +163,9 @@ def load_caption_model(model_key: str):
     return load_model(MODEL_LOCAL[model_key], compile=False)
 
 
-# ---------------------------
+# ============================================================
 # INFERENCE
-# ---------------------------
+# ============================================================
 def extract_feature(encoder, pil_img: Image.Image) -> np.ndarray:
     img = pil_img.convert("RGB").resize((224, 224))
     x = np.array(img, dtype=np.float32)
@@ -223,10 +221,21 @@ def beam_decode(model, tokenizer, index_word, photo, max_length, beam_size=5) ->
         words.append(w)
     return " ".join(words).strip()
 
+def post_process(text: str, tone_mode: str) -> str:
+    if not text:
+        return ""
+    text = text.strip()
+    if tone_mode == "Short":
+        parts = text.split()
+        text = " ".join(parts[:8]) if len(parts) > 8 else text
+    if tone_mode == "Friendly":
+        text = text[:1].upper() + text[1:]
+    return text
 
-# ---------------------------
-# UI (ONE SCREEN)
-# ---------------------------
+
+# ============================================================
+# UI (ALL ON ONE SCREEN)
+# ============================================================
 tok, index_word, max_length = load_tokenizer_config()
 encoder = load_encoder()
 
@@ -235,13 +244,12 @@ st.markdown(
     <div class="hero">
       <div style="display:flex; justify-content:space-between; align-items:center; gap:12px;">
         <div>
-          <div style="font-size:1.35rem; font-weight:850; color:#0F172A;">✨ CaptionLab</div>
-          <div class="muted">Turn any photo into a clean, human-friendly caption in seconds.</div>
+          <div style="font-size:1.35rem; font-weight:900; color:#0F172A;">✨ CaptionLab</div>
+          <div class="muted">Upload a photo and get 3 high-quality captions instantly.</div>
         </div>
         <div style="text-align:right;">
-          <span class="pill">🧠 3 Models</span>
-          <span class="pill">⚡ Fast Inference</span>
-          <span class="pill">🧾 Max len: <b>{max_length}</b></span>
+          <span class="pill">🧠 LSTM • RNN • GRU</span>
+          <span class="pill">🧾 Max length: <b>{max_length}</b></span>
         </div>
       </div>
     </div>
@@ -249,111 +257,73 @@ st.markdown(
     unsafe_allow_html=True
 )
 
-topL, topR = st.columns([1.05, 0.95], gap="large")
+topL, topR = st.columns([1.15, 0.85], gap="large")
 
 with topL:
-    st.markdown("#### 📤 Upload your image")
-    uploaded = st.file_uploader("Drag & drop or browse", type=["jpg", "jpeg", "png"])
+    st.markdown("#### 📤 Upload")
+    uploaded = st.file_uploader("JPG / PNG", type=["jpg", "jpeg", "png"])
     if uploaded:
         img = Image.open(uploaded)
         st.image(img, use_container_width=True)
+    else:
+        img = None
 
 with topR:
-    st.markdown("#### ⚙️ Caption controls")
-    c1, c2, c3 = st.columns([1.1, 1.1, 1.2])
-    with c1:
-        decoding = st.selectbox("Mode", ["Beam Search (Best)", "Greedy (Fast)"], index=0)
-    with c2:
-        beam_size = st.slider("Beam", 1, 10, 5, disabled=(decoding.startswith("Greedy")))
-    with c3:
-        tone = st.selectbox("Style", ["Friendly", "Simple", "Short"], index=0)
+    st.markdown("#### ⚙️ Controls")
+    mode = st.selectbox("Generation", ["Beam Search (Best Quality)", "Greedy (Fast)"], index=0)
+    beam_size = st.slider("Beam size", 1, 10, 5, disabled=mode.startswith("Greedy"))
+    tone = st.selectbox("Caption style", ["Friendly", "Simple", "Short"], index=0)
+    run = st.button("✨ Generate Captions", use_container_width=True, disabled=(img is None))
 
-    run = st.button("✨ Generate captions", use_container_width=True, disabled=(uploaded is None))
-
-def post_process(text: str, tone_mode: str) -> str:
-    if not text:
-        return ""
-    text = text.strip()
-    if tone_mode == "Short":
-        # keep first ~8 words if long
-        parts = text.split()
-        text = " ".join(parts[:8]) if len(parts) > 8 else text
-    if tone_mode == "Friendly":
-        # sentence-case
-        text = text[:1].upper() + text[1:]
-    return text
-
-# Result row: 3 cards side-by-side
-col1, col2, col3 = st.columns(3, gap="large")
+c1, c2, c3 = st.columns(3, gap="large")
 
 def caption_card(col, title, caption, ms):
     col.markdown(f"#### {title}")
     col.markdown('<div class="card">', unsafe_allow_html=True)
     if caption:
         col.markdown(f'<div class="caption">“{caption}”</div>', unsafe_allow_html=True)
-        col.markdown(
-            f'<span class="pill">⏱️ {ms:.0f} ms</span>',
-            unsafe_allow_html=True
-        )
-        col.button("Copy", key=f"copy_{title}", help="Select the caption and copy it.")
+        col.markdown(f'<div class="muted">⏱️ {ms:.0f} ms</div>', unsafe_allow_html=True)
     else:
-        col.markdown('<div class="muted">Upload an image and click “Generate captions”.</div>', unsafe_allow_html=True)
+        col.markdown('<div class="muted">Upload an image, then click “Generate Captions”.</div>', unsafe_allow_html=True)
     col.markdown("</div>", unsafe_allow_html=True)
 
-if run and uploaded:
+results = {}
+
+if run and img is not None:
     try:
         photo = extract_feature(encoder, img)
 
-        results = {}
         for mk in ["LSTM", "RNN", "GRU"]:
             model = load_caption_model(mk)
             t0 = time.time()
-            if decoding.startswith("Greedy"):
+
+            if mode.startswith("Greedy"):
                 cap = greedy_decode(model, tok, index_word, photo, max_length)
             else:
                 cap = beam_decode(model, tok, index_word, photo, max_length, beam_size=beam_size)
+
             ms = (time.time() - t0) * 1000
             cap = post_process(cap, tone)
             results[mk] = (cap if cap else "No caption generated. Try Greedy mode.", ms)
 
         st.session_state.setdefault("history", [])
-        st.session_state["history"].insert(0, {"image": getattr(uploaded, "name", "uploaded"), **{k: v[0] for k, v in results.items()}})
+        st.session_state["history"].insert(
+            0,
+            {"image": getattr(uploaded, "name", "uploaded"),
+             "LSTM": results["LSTM"][0],
+             "RNN":  results["RNN"][0],
+             "GRU":  results["GRU"][0]}
+        )
 
     except Exception as e:
         st.error(str(e))
-        results = {}
 
-else:
-    results = {}
+caption_card(c1, "🟣 LSTM Caption", results.get("LSTM", ("", 0))[0], results.get("LSTM", ("", 0))[1])
+caption_card(c2, "🟠 RNN Caption",  results.get("RNN",  ("", 0))[0], results.get("RNN",  ("", 0))[1])
+caption_card(c3, "🟢 GRU Caption",  results.get("GRU",  ("", 0))[0], results.get("GRU",  ("", 0))[1])
 
-caption_card(col1, "🟣 LSTM Caption", results.get("LSTM", ("", 0))[0], results.get("LSTM", ("", 0))[1])
-caption_card(col2, "🟠 RNN Caption",  results.get("RNN",  ("", 0))[0], results.get("RNN",  ("", 0))[1])
-caption_card(col3, "🟢 GRU Caption",  results.get("GRU",  ("", 0))[0], results.get("GRU",  ("", 0))[1])
-
-# Keep extras collapsed to avoid scrolling
-with st.expander("📦 Batch mode (optional) — caption multiple images", expanded=False):
-    files = st.file_uploader("Upload multiple images", type=["jpg", "jpeg", "png"], accept_multiple_files=True, key="batch")
-    batch_model = st.selectbox("Use model", ["LSTM", "RNN", "GRU"], index=0, key="batch_model")
-    run_b = st.button("Run batch", disabled=not files)
-
-    if run_b and files:
-        model = load_caption_model(batch_model)
-        rows = []
-        for f in files:
-            im = Image.open(f)
-            p = extract_feature(encoder, im)
-            if decoding.startswith("Greedy"):
-                cap = greedy_decode(model, tok, index_word, p, max_length)
-            else:
-                cap = beam_decode(model, tok, index_word, p, max_length, beam_size=beam_size)
-            cap = post_process(cap, tone)
-            rows.append({"file": f.name, "model": batch_model, "caption": cap})
-
-        df = pd.DataFrame(rows)
-        st.dataframe(df, use_container_width=True, hide_index=True)
-        st.download_button("Download CSV", df.to_csv(index=False).encode("utf-8"), "captions.csv", "text/csv")
-
-with st.expander("🧾 History (optional) — recent results", expanded=False):
+# Optional extras collapsed to keep one-screen view
+with st.expander("🧾 View history (optional)", expanded=False):
     hist = st.session_state.get("history", [])
     if not hist:
         st.info("No history yet.")
