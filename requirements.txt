@@ -3,3 +3,4 @@ tensorflow==2.20.0
 numpy
 pillow
 pandas
+deep-translator
