@@ -1,9 +1,11 @@
 import json
+import time
 import urllib.request
 from pathlib import Path
 from urllib.error import HTTPError, URLError
 
 import numpy as np
+import pandas as pd
 import streamlit as st
 from PIL import Image
 
@@ -13,84 +15,58 @@ from tensorflow.keras.preprocessing.text import tokenizer_from_json
 from tensorflow.keras.applications.densenet import DenseNet201, preprocess_input
 
 
-# =========================
-# PAGE
-# =========================
-st.set_page_config(
-    page_title="Image Captioning Studio",
-    page_icon="✨",
-    layout="wide",
-)
+# ---------------------------
+# CONFIG (EDIT THESE)
+# ---------------------------
+OWNER = "MuhammadKamal6"
+REPO  = "NLP."   # change to "NLP" if your repo name has no dot
+TAG   = "v1"
 
-# =========================
-# GLOBAL CSS (Full restyle)
-# =========================
+ART_DIR = Path("artifacts")
+TOKENIZER_PATH = ART_DIR / "tokenizer.json"
+CONFIG_PATH    = ART_DIR / "config.json"
+
+MODEL_FILES = {
+    "LSTM": "last_lstm_model.keras",
+    "RNN":  "last_rnn_model.keras",
+    "GRU":  "last_gru_model.keras",
+}
+
+
+# ---------------------------
+# PAGE + STYLE (Different look)
+# ---------------------------
+st.set_page_config(page_title="CaptionLab", page_icon="🧪", layout="wide")
+
 st.markdown(
     """
     <style>
-      /* App background */
-      [data-testid="stAppViewContainer"]{
+      .block-container { max-width: 1200px; padding-top: 1.2rem; padding-bottom: 2.2rem; }
+      header, footer, #MainMenu { visibility: hidden; }
+
+      /* Light, clean studio look */
+      [data-testid="stAppViewContainer"] {
         background:
-          radial-gradient(1200px 600px at 15% 10%, rgba(124,58,237,0.30), transparent 50%),
-          radial-gradient(900px 500px at 85% 20%, rgba(59,130,246,0.20), transparent 55%),
-          radial-gradient(1000px 800px at 60% 80%, rgba(16,185,129,0.12), transparent 60%),
-          linear-gradient(180deg, rgba(7,10,18,1) 0%, rgba(6,9,16,1) 100%);
-      }
-
-      /* Reduce top padding */
-      .block-container { padding-top: 1.2rem; padding-bottom: 2.2rem; max-width: 1200px; }
-
-      /* Sidebar styling */
-      [data-testid="stSidebar"]{
-        background: linear-gradient(180deg, rgba(14,21,38,0.95) 0%, rgba(10,15,28,0.95) 100%);
-        border-right: 1px solid rgba(148,163,184,0.15);
-      }
-
-      /* Typography */
-      h1, h2, h3 { letter-spacing: -0.02em; }
-      p, li { color: rgba(233,238,246,0.92); }
-
-      /* Buttons */
-      div.stButton > button {
-        border-radius: 12px !important;
-        padding: 0.70rem 1rem !important;
-        border: 1px solid rgba(124,58,237,0.35) !important;
-        background: linear-gradient(135deg, rgba(124,58,237,0.95), rgba(59,130,246,0.70)) !important;
-        color: #ffffff !important;
-        font-weight: 650 !important;
-        transition: transform 0.05s ease-in-out, filter 0.15s ease-in-out;
-      }
-      div.stButton > button:hover { filter: brightness(1.06); }
-      div.stButton > button:active { transform: scale(0.99); }
-
-      /* File uploader */
-      [data-testid="stFileUploaderDropzone"]{
-        border: 1px dashed rgba(148,163,184,0.35) !important;
-        border-radius: 14px !important;
-        background: rgba(148,163,184,0.05) !important;
-      }
-
-      /* Inputs */
-      [data-baseweb="select"] > div,
-      [data-baseweb="input"] > div{
-        border-radius: 12px !important;
-      }
-
-      /* Custom cards */
-      .card {
-        border: 1px solid rgba(148,163,184,0.18);
-        background: rgba(148,163,184,0.06);
-        border-radius: 18px;
-        padding: 16px 18px;
-        box-shadow: 0 14px 40px rgba(0,0,0,0.22);
+          radial-gradient(900px 600px at 10% 10%, rgba(14,165,233,.15), transparent 60%),
+          radial-gradient(900px 600px at 85% 15%, rgba(34,197,94,.10), transparent 55%),
+          radial-gradient(1000px 700px at 50% 90%, rgba(168,85,247,.10), transparent 60%),
+          linear-gradient(180deg, #F6F7FB 0%, #F3F5FA 100%);
       }
 
       .hero {
-        border: 1px solid rgba(148,163,184,0.16);
-        background: linear-gradient(135deg, rgba(124,58,237,0.20), rgba(59,130,246,0.10));
-        border-radius: 22px;
-        padding: 20px 20px;
-        box-shadow: 0 14px 40px rgba(0,0,0,0.20);
+        border: 1px solid rgba(15,23,42,.12);
+        background: linear-gradient(135deg, rgba(255,255,255,.85), rgba(255,255,255,.55));
+        border-radius: 20px;
+        padding: 16px 18px;
+        box-shadow: 0 18px 45px rgba(15,23,42,.08);
+      }
+
+      .card {
+        border: 1px solid rgba(15,23,42,.10);
+        background: rgba(255,255,255,.75);
+        border-radius: 18px;
+        padding: 14px 16px;
+        box-shadow: 0 16px 40px rgba(15,23,42,.06);
       }
 
       .pill {
@@ -99,122 +75,77 @@ st.markdown(
         gap: 8px;
         padding: 6px 10px;
         border-radius: 999px;
-        border: 1px solid rgba(148,163,184,0.18);
-        background: rgba(148,163,184,0.05);
-        font-size: 0.85rem;
-        color: rgba(233,238,246,0.92);
+        border: 1px solid rgba(15,23,42,.10);
+        background: rgba(255,255,255,.75);
+        font-size: .85rem;
         margin-right: 8px;
       }
 
-      .muted { opacity: 0.78; font-size: 0.92rem; }
-      .captionText { font-size: 1.10rem; line-height: 1.55; }
+      .caption {
+        font-size: 1.12rem;
+        line-height: 1.55;
+        color: #0F172A;
+      }
 
-      /* Hide Streamlit default footer/menu */
-      #MainMenu { visibility: hidden; }
-      footer { visibility: hidden; }
-      header { visibility: hidden; }
+      /* nicer buttons */
+      div.stButton > button {
+        border-radius: 12px !important;
+        padding: .7rem 1rem !important;
+        border: 1px solid rgba(14,165,233,.35) !important;
+        background: linear-gradient(135deg, rgba(14,165,233,.95), rgba(168,85,247,.75)) !important;
+        color: white !important;
+        font-weight: 700 !important;
+      }
+      div.stButton > button:hover { filter: brightness(1.05); }
     </style>
     """,
-    unsafe_allow_html=True,
+    unsafe_allow_html=True
 )
 
 
-# =========================
-# CONFIG / PATHS
-# =========================
-ART_DIR = Path("artifacts")
-ART_DIR.mkdir(exist_ok=True)
-
-TOKENIZER_PATH = ART_DIR / "tokenizer.json"
-CONFIG_PATH = ART_DIR / "config.json"
-
-# ✅ EDIT THESE to match your GitHub repo/release
-OWNER = "MuhammadKamal6"
-REPO  = "NLP."   # change to "NLP" if your repo name is without dot
-TAG   = "v1"
-
-MODEL_ASSET = {
-    "LSTM": "last_lstm_model.keras",
-    "RNN":  "last_rnn_model.keras",
-    "GRU":  "last_gru_model.keras",
-}
-
+# ---------------------------
+# DOWNLOAD + LOAD HELPERS
+# ---------------------------
 def release_url(filename: str) -> str:
     return f"https://github.com/{OWNER}/{REPO}/releases/download/{TAG}/{filename}"
 
-MODEL_URLS = {k: release_url(v) for k, v in MODEL_ASSET.items()}
-MODEL_LOCAL = {k: (ART_DIR / v) for k, v in MODEL_ASSET.items()}
+MODEL_URL = {k: release_url(v) for k, v in MODEL_FILES.items()}
+MODEL_LOCAL = {k: ART_DIR / v for k, v in MODEL_FILES.items()}
 
-
-# =========================
-# HELPERS
-# =========================
 def safe_exists(p: Path) -> bool:
     try:
         return p.exists() and p.stat().st_size > 0
     except Exception:
         return False
 
-def mb(n: int) -> str:
-    return f"{n/1024/1024:.1f} MB"
-
-def download_model(url: str, out_path: Path):
+def download_if_missing(model_key: str):
+    out_path = MODEL_LOCAL[model_key]
+    url = MODEL_URL[model_key]
     out_path.parent.mkdir(parents=True, exist_ok=True)
+
     if safe_exists(out_path):
         return
 
-    st.toast(f"Downloading {out_path.name}…", icon="⬇️")
-
-    prog = st.progress(0)
-    status = st.empty()
-
-    try:
-        with urllib.request.urlopen(url) as resp:
-            total = resp.length or 0
-            chunk = 1024 * 1024  # 1MB
-            downloaded = 0
-
-            with open(out_path, "wb") as f:
-                while True:
-                    data = resp.read(chunk)
-                    if not data:
-                        break
-                    f.write(data)
-                    downloaded += len(data)
-
-                    if total > 0:
-                        pct = min(int(downloaded * 100 / total), 100)
-                        prog.progress(pct)
-                        status.write(f"Downloaded {mb(downloaded)} / {mb(total)}")
-                    else:
-                        prog.progress(min(int((downloaded / (70*1024*1024)) * 100), 100))
-                        status.write(f"Downloaded {mb(downloaded)}")
-
-        prog.progress(100)
-        status.empty()
-
-    except HTTPError as e:
-        prog.empty()
-        status.empty()
-        raise RuntimeError(
-            f"Download failed (HTTP). Make sure the Release is published and asset exists.\nURL: {url}\n{e}"
-        )
-    except URLError as e:
-        prog.empty()
-        status.empty()
-        raise RuntimeError(f"Network error while downloading model.\nURL: {url}\n{e}")
-
+    with st.spinner(f"Downloading {out_path.name} (one-time)…"):
+        try:
+            urllib.request.urlretrieve(url, out_path)
+        except HTTPError as e:
+            raise RuntimeError(
+                f"Download failed (HTTP). Check Release is published + asset exists.\nURL: {url}\n{e}"
+            )
+        except URLError as e:
+            raise RuntimeError(f"Network error while downloading.\nURL: {url}\n{e}")
 
 @st.cache_resource
 def load_encoder():
-    return DenseNet201(weights="imagenet", include_top=False, pooling="avg")
+    return DenseNet201(weights="imagenet", include_top=False, pooling="avg")  # 1920-D
 
 @st.cache_resource
 def load_tokenizer_config():
     if not TOKENIZER_PATH.exists():
-        raise FileNotFoundError("Missing artifacts/tokenizer.json (upload it in the repo).")
+        raise FileNotFoundError("Missing artifacts/tokenizer.json in repo.")
     if not CONFIG_PATH.exists():
-        raise FileNotFoundError("Missing artifacts/config.json (upload it in the repo).")
+        raise FileNotFoundError("Missing artifacts/config.json in repo.")
 
     with open(TOKENIZER_PATH, "r", encoding="utf-8") as f:
         tok = tokenizer_from_json(f.read())
@@ -228,9 +159,13 @@ def load_tokenizer_config():
 
 @st.cache_resource
 def load_caption_model(model_key: str):
-    download_model(MODEL_URLS[model_key], MODEL_LOCAL[model_key])
+    download_if_missing(model_key)
     return load_model(MODEL_LOCAL[model_key], compile=False)
 
+
+# ---------------------------
+# CAPTIONING
+# ---------------------------
 def extract_feature(encoder, pil_img: Image.Image) -> np.ndarray:
     img = pil_img.convert("RGB").resize((224, 224))
     x = np.array(img, dtype=np.float32)
@@ -252,13 +187,13 @@ def greedy_decode(model, tokenizer, index_word, photo, max_length) -> str:
         in_text += " " + word
         if word == "endseq":
             break
+
     words = [w for w in in_text.split() if w not in ("startseq", "endseq")]
     return " ".join(words).strip()
 
 def beam_decode(model, tokenizer, index_word, photo, max_length, beam_size=5) -> str:
     start = tokenizer.word_index.get("startseq")
     end = tokenizer.word_index.get("endseq")
-
     sequences = [([start], 0.0)]  # (token_ids, log_prob)
 
     for _ in range(max_length):
@@ -290,47 +225,26 @@ def beam_decode(model, tokenizer, index_word, photo, max_length, beam_size=5) ->
     return " ".join(words).strip()
 
 
-# =========================
-# SIDEBAR (Clean)
-# =========================
-with st.sidebar:
-    st.markdown("## ✨ Captioning Studio")
-    st.markdown('<div class="muted">A clean demo for your Flickr8k captioning models.</div>', unsafe_allow_html=True)
-    st.write("")
+# ---------------------------
+# HEADER (Top bar look)
+# ---------------------------
+tok, index_word, max_length = load_tokenizer_config()
+encoder = load_encoder()
 
-    model_choice = st.selectbox("Model", ["LSTM", "RNN", "GRU"], index=0)
-
-    decoding = st.radio("Decoding", ["Beam Search", "Greedy"], index=0, horizontal=True)
-    beam_size = st.slider("Beam size", 1, 10, 5, disabled=(decoding == "Greedy"))
-
-    st.write("")
-    st.markdown("### 📦 Model source")
-    st.markdown('<div class="muted">Downloaded from GitHub Releases and cached.</div>', unsafe_allow_html=True)
-    st.code(MODEL_URLS[model_choice], language="text")
-
-    st.write("")
-    st.markdown("### ✅ Quick checks")
-    st.write(f"- tokenizer.json: {'OK' if TOKENIZER_PATH.exists() else 'Missing'}")
-    st.write(f"- config.json: {'OK' if CONFIG_PATH.exists() else 'Missing'}")
-
-
-# =========================
-# HERO HEADER
-# =========================
 st.markdown(
-    """
+    f"""
     <div class="hero">
       <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:16px;">
         <div>
-          <div style="font-size:0.95rem; opacity:0.85;">NLP Project • Image Captioning</div>
-          <div style="font-size:2.1rem; font-weight:800; margin-top:6px;">Generate a caption for any image</div>
-          <div class="muted" style="margin-top:6px;">
-            Encoder: DenseNet201 • Decoder: LSTM / RNN / GRU • Decode: Greedy or Beam Search
+          <div style="opacity:.75; font-size:.95rem;">NLP Project • Image Captioning</div>
+          <div style="font-size:2.1rem; font-weight:850; margin-top:4px; color:#0F172A;">CaptionLab</div>
+          <div style="opacity:.75; margin-top:6px; color:#0F172A;">
+            Single • Compare models • Batch captions • Download results
           </div>
         </div>
         <div style="text-align:right;">
-          <span class="pill">🧠 Model: <b style="margin-left:6px;">""" + model_choice + """</b></span><br/>
-          <span class="pill">🧾 Decode: <b style="margin-left:6px;">""" + decoding + """</b></span>
+          <span class="pill">📦 Encoder: <b>DenseNet201</b></span>
+          <span class="pill">🧾 Max length: <b>{max_length}</b></span>
         </div>
       </div>
     </div>
@@ -341,88 +255,162 @@ st.markdown(
 st.write("")
 
 
-# =========================
-# MAIN UI
-# =========================
-tab1, tab2 = st.tabs(["🖼️ Caption", "ℹ️ About"])
+# ---------------------------
+# GLOBAL CONTROLS (no sidebar)
+# ---------------------------
+c1, c2, c3, c4 = st.columns([1.2, 1.1, 1.1, 1.1])
+with c1:
+    decoding = st.selectbox("Decoding", ["Beam Search", "Greedy"], index=0)
+with c2:
+    beam_size = st.slider("Beam size", 1, 10, 5, disabled=(decoding == "Greedy"))
+with c3:
+    default_model = st.selectbox("Default model", ["LSTM", "RNN", "GRU"], index=0)
+with c4:
+    st.caption("Tip: Compare tab makes your project look unique ✅")
 
-with tab1:
-    left, right = st.columns([1.1, 0.9], gap="large")
+tabs = st.tabs(["🖼️ Single", "🆚 Compare", "📦 Batch", "🧾 History"])
+
+
+# ---------------------------
+# TAB: Single
+# ---------------------------
+with tabs[0]:
+    left, right = st.columns([1.05, 0.95], gap="large")
 
     with left:
-        st.markdown("### Upload an image")
-        uploaded = st.file_uploader("JPG / PNG", type=["jpg", "jpeg", "png"])
+        st.markdown("### Upload")
+        up = st.file_uploader("JPG / PNG", type=["jpg", "jpeg", "png"], key="single_up")
+        chosen_model = st.selectbox("Model", ["LSTM", "RNN", "GRU"], index=["LSTM","RNN","GRU"].index(default_model))
+        run = st.button("✨ Generate Caption", use_container_width=True, disabled=(up is None))
 
-        if uploaded:
-            img = Image.open(uploaded)
+        if up:
+            img = Image.open(up)
             st.image(img, use_container_width=True)
-        else:
-            st.markdown('<div class="card muted">Tip: use clear images (people, animals, outdoor scenes) for best results.</div>', unsafe_allow_html=True)
-
-        st.write("")
-        generate_btn = st.button("✨ Generate Caption", use_container_width=True, disabled=(uploaded is None))
 
     with right:
         st.markdown("### Result")
         st.markdown('<div class="card">', unsafe_allow_html=True)
 
-        if uploaded is None:
-            st.markdown("**Waiting for an image…**")
-            st.markdown('<div class="muted">Upload an image on the left to generate a caption.</div>', unsafe_allow_html=True)
-            st.markdown("</div>", unsafe_allow_html=True)
+        if not up:
+            st.write("Upload an image to generate a caption.")
+        elif run:
+            try:
+                model = load_caption_model(chosen_model)
+                photo = extract_feature(encoder, img)
+
+                t0 = time.time()
+                if decoding == "Greedy":
+                    cap = greedy_decode(model, tok, index_word, photo, max_length)
+                else:
+                    cap = beam_decode(model, tok, index_word, photo, max_length, beam_size=beam_size)
+                ms = (time.time() - t0) * 1000
+
+                if not cap:
+                    cap = "Empty caption. Try Greedy or smaller beam size."
+
+                st.markdown("**Generated caption**")
+                st.markdown(f'<div class="caption">“{cap}”</div>', unsafe_allow_html=True)
+
+                st.write("")
+                st.markdown(
+                    f'<span class="pill">🧠 {chosen_model}</span>'
+                    f'<span class="pill">🧾 {decoding}</span>'
+                    + (f'<span class="pill">🔎 Beam {beam_size}</span>' if decoding == "Beam Search" else "")
+                    + f'<span class="pill">⏱️ {ms:.0f} ms</span>',
+                    unsafe_allow_html=True
+                )
+
+                st.session_state.setdefault("history", [])
+                st.session_state["history"].insert(0, {"mode": "Single", "model": chosen_model, "caption": cap})
+
+            except Exception as e:
+                st.error(str(e))
+
         else:
-            if generate_btn:
+            st.write("Ready. Click **Generate Caption**.")
+
+        st.markdown("</div>", unsafe_allow_html=True)
+
+
+# ---------------------------
+# TAB: Compare (key difference vs your screenshot)
+# ---------------------------
+with tabs[1]:
+    st.markdown("### Compare LSTM vs RNN vs GRU (same image)")
+    upc = st.file_uploader("Upload an image", type=["jpg", "jpeg", "png"], key="cmp_up")
+    run_cmp = st.button("🆚 Generate for all models", disabled=(upc is None), use_container_width=True)
+
+    if upc:
+        imgc = Image.open(upc)
+        st.image(imgc, use_container_width=True)
+
+    if upc and run_cmp:
+        photo = extract_feature(encoder, imgc)
+
+        cols = st.columns(3, gap="large")
+        results = []
+        for col, mk in zip(cols, ["LSTM", "RNN", "GRU"]):
+            with col:
+                st.markdown(f"#### {mk}")
+                st.markdown('<div class="card">', unsafe_allow_html=True)
                 try:
-                    tok, index_word, max_length = load_tokenizer_config()
-                    encoder = load_encoder()
-                    caption_model = load_caption_model(model_choice)
+                    model = load_caption_model(mk)
+                    if decoding == "Greedy":
+                        cap = greedy_decode(model, tok, index_word, photo, max_length)
+                    else:
+                        cap = beam_decode(model, tok, index_word, photo, max_length, beam_size=beam_size)
 
-                    with st.spinner("Running model…"):
-                        photo = extract_feature(encoder, img)
-
-                        if decoding == "Greedy":
-                            caption = greedy_decode(caption_model, tok, index_word, photo, max_length)
-                        else:
-                            caption = beam_decode(caption_model, tok, index_word, photo, max_length, beam_size=beam_size)
-
-                    if not caption:
-                        caption = "⚠️ Empty caption. Try Greedy or a smaller beam size."
-
-                    st.markdown("**Generated Caption**")
-                    st.markdown(f'<div class="captionText">“{caption}”</div>', unsafe_allow_html=True)
-
-                    st.write("")
-                    st.markdown(
-                        f'<span class="pill">🧠 {model_choice}</span>'
-                        f'<span class="pill">🧾 {decoding}</span>'
-                        + (f'<span class="pill">🔎 Beam {beam_size}</span>' if decoding == "Beam Search" else ""),
-                        unsafe_allow_html=True
-                    )
-
+                    st.markdown(f'<div class="caption">“{cap}”</div>', unsafe_allow_html=True)
+                    results.append({"mode": "Compare", "model": mk, "caption": cap})
                 except Exception as e:
                     st.error(str(e))
+                st.markdown("</div>", unsafe_allow_html=True)
 
-            else:
-                st.markdown("**Ready.**")
-                st.markdown('<div class="muted">Click “Generate Caption” to run inference.</div>', unsafe_allow_html=True)
+        st.session_state.setdefault("history", [])
+        st.session_state["history"] = results + st.session_state["history"]
 
-            st.markdown("</div>", unsafe_allow_html=True)
 
-with tab2:
-    st.markdown(
-        """
-        <div class="card">
-          <h3 style="margin-top:0;">How it works</h3>
-          <ul>
-            <li><b>DenseNet201</b> extracts a 1920-dim feature vector from the image.</li>
-            <li>A decoder model (LSTM / RNN / GRU) predicts the caption word-by-word.</li>
-            <li><b>Greedy</b> picks the best word each step. <b>Beam Search</b> keeps multiple best candidates.</li>
-          </ul>
-          <div class="muted">Note: Models are downloaded from GitHub Releases once and cached on the server.</div>
-        </div>
-        """,
-        unsafe_allow_html=True
-    )
+# ---------------------------
+# TAB: Batch (another big difference)
+# ---------------------------
+with tabs[2]:
+    st.markdown("### Batch captioning (multiple images → table → download CSV)")
+    model_for_batch = st.selectbox("Model for batch", ["LSTM", "RNN", "GRU"], index=["LSTM","RNN","GRU"].index(default_model))
+    files = st.file_uploader("Upload multiple images", type=["jpg", "jpeg", "png"], accept_multiple_files=True)
 
-st.write("")
-st.markdown('<div class="muted" style="text-align:center;">Made for your NLP Image Captioning Project • Streamlit UI</div>', unsafe_allow_html=True)
+    if files:
+        run_b = st.button("📦 Run batch", use_container_width=True)
+        if run_b:
+            model = load_caption_model(model_for_batch)
+            rows = []
+
+            for f in files:
+                img = Image.open(f)
+                photo = extract_feature(encoder, img)
+                if decoding == "Greedy":
+                    cap = greedy_decode(model, tok, index_word, photo, max_length)
+                else:
+                    cap = beam_decode(model, tok, index_word, photo, max_length, beam_size=beam_size)
+
+                rows.append({"file": f.name, "model": model_for_batch, "caption": cap})
+
+            df = pd.DataFrame(rows)
+            st.dataframe(df, use_container_width=True, hide_index=True)
+
+            csv = df.to_csv(index=False).encode("utf-8")
+            st.download_button("⬇️ Download CSV", data=csv, file_name="captions.csv", mime="text/csv")
+
+
+# ---------------------------
+# TAB: History
+# ---------------------------
+with tabs[3]:
+    st.markdown("### Session history")
+    hist = st.session_state.get("history", [])
+    if not hist:
+        st.info("No history yet. Generate some captions first.")
+    else:
+        st.dataframe(pd.DataFrame(hist[:50]), use_container_width=True, hide_index=True)
+        if st.button("Clear history"):
+            st.session_state["history"] = []
+            st.rerun()
