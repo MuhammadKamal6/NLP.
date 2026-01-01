@@ -150,7 +150,7 @@ Fix:
 
 ## 📸 Demo
 
-* Live app: **(add your Streamlit link here)**
+* Live app: **https://imagecaption1w.streamlit.app/**
 * GitHub repo: **(add your repo link here)**
 
 ---
