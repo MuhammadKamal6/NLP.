@@ -1,5 +1,3 @@
-# Image captioning.
-
 # 🖼️ CaptionLab — Image Captioning Web App (EN + AR)
 
 CaptionLab is an online **image captioning** app that generates a natural-language caption for any uploaded image using **DenseNet201 + (LSTM / RNN / GRU)**, and shows an **Arabic translation** under the English caption.
