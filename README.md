@@ -151,7 +151,7 @@ Fix:
 ## 📸 Demo
 
 * Live app: **https://imagecaption1w.streamlit.app/**
-* GitHub repo: **(add your repo link here)**
+* GitHub repo: **https://github.com/MuhammadKamal6/NLP./tree/main**
 
 ---
 
